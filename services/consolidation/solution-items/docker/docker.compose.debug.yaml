@@ -1,0 +1,37 @@
+name: cash-flow-consolidation-service
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    container_name: cash-flow-postgres
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin@123
+      - POSTGRES_DB=cash-flow-consolidation-service
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "pg_isready",
+          "-U",
+          "admin",
+          "-d",
+          "cash-flow-consolidation-service",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cash-flow-network
+
+volumes:
+  postgres-data:
+
+networks:
+  cash-flow-network:
+    driver: bridge

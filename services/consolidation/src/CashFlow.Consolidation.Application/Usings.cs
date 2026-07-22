@@ -1,0 +1,12 @@
+﻿global using System.Reflection;
+global using Ardalis.Specification;
+global using CashFlow.Consolidation.Application.Abstractions;
+global using CashFlow.Consolidation.Application.Common.Dtos;
+global using CashFlow.Consolidation.Application.DailyBalances.Shared.Specifications;
+global using CashFlow.Consolidation.Domain.Entities;
+global using CashFlow.Shared.Application.Abstractions;
+global using CashFlow.Shared.Application.Common;
+global using CashFlow.Shared.Domain.Enums;
+global using FluentValidation;
+global using MediatR;
+global using Microsoft.Extensions.DependencyInjection;
