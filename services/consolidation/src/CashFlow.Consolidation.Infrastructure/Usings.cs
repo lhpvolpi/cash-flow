@@ -1,4 +1,6 @@
-﻿global using Ardalis.Specification.EntityFrameworkCore;
+﻿global using System.Text;
+global using System.Text.Json;
+global using Ardalis.Specification.EntityFrameworkCore;
 global using CashFlow.Consolidation.Application.Abstractions;
 global using CashFlow.Consolidation.Domain.Entities;
 global using CashFlow.Shared.Application.Abstractions;
@@ -10,3 +12,5 @@ global using Microsoft.EntityFrameworkCore.Storage;
 global using Microsoft.Extensions.Configuration;
 global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Extensions.Logging;
+global using RabbitMQ.Client;
+global using RabbitMQ.Client.Events;

@@ -1,5 +1,7 @@
 using CashFlow.Consolidation.Infrastructure.Data;
 using CashFlow.Consolidation.Infrastructure.Data.Repositories;
+using CashFlow.Consolidation.Infrastructure.MessageBroker;
+using CashFlow.Shared.Application.Models;
 
 namespace CashFlow.Consolidation.Infrastructure;
 
@@ -17,6 +19,24 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IDailyBalanceRepository, DailyBalanceRepository>();
+
+        // RabbitMQ
+        var rabbitMqConnectionString = configuration.GetConnectionString("RabbitMq")
+            ?? throw new InvalidOperationException("RabbitMq connection string not found in appsettings.json");
+
+        services.AddSingleton<IConnection>(sp =>
+        {
+            var factory = new ConnectionFactory()
+            {
+                Uri = new Uri(rabbitMqConnectionString)
+            };
+            return factory.CreateConnection();
+        });
+
+        services.AddScoped<IMessageBrokerConsumer<BrokerMessage>, RabbitMqMessageBrokerConsumer>();
+        services.AddScoped<IConsolidationMessageBrokerConsumer>(sp =>
+            sp.GetRequiredService<IMessageBrokerConsumer<BrokerMessage>>() as RabbitMqMessageBrokerConsumer
+            ?? throw new InvalidOperationException("Failed to resolve RabbitMqMessageBrokerConsumer"));
     }
 
     public static async Task InitializeDatabaseAsync(this WebApplication app)

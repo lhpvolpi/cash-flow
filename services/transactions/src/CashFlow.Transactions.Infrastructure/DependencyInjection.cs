@@ -3,6 +3,7 @@ using CashFlow.Shared.Application.Abstractions;
 using CashFlow.Transactions.Application.Abstractions;
 using CashFlow.Transactions.Infrastructure.Data;
 using CashFlow.Transactions.Infrastructure.Data.Repositories;
+using CashFlow.Transactions.Infrastructure.MessageBroker;
 
 namespace CashFlow.Transactions.Infrastructure;
 
@@ -21,6 +22,21 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<ITransactionRepository, TransactionsRepository>();
         services.AddScoped<IOutboxMessageRepository, OutboxMessageRepository>();
+
+        // RabbitMQ
+        var rabbitMqConnectionString = configuration.GetConnectionString("RabbitMq")
+            ?? throw new InvalidOperationException("RabbitMq connection string not found in appsettings.json");
+
+        services.AddSingleton<IConnection>(sp =>
+        {
+            var factory = new ConnectionFactory()
+            {
+                Uri = new Uri(rabbitMqConnectionString)
+            };
+            return factory.CreateConnection();
+        });
+
+        services.AddScoped<IOutboxBrokerPublisher, RabbitMqOutboxBrokerPublisher>();
     }
 
     public static async Task InitializeDatabaseAsync(this WebApplication app)

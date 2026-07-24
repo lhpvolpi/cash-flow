@@ -11,6 +11,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CashFlow.Transactions.Appli
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CashFlow.Transactions.Infrastructure", "src\CashFlow.Transactions.Infrastructure\CashFlow.Transactions.Infrastructure.csproj", "{75CBBE98-255E-4769-B303-11C4FB2C6A73}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CashFlow.Transactions.Outbox", "src\CashFlow.Transactions.Outbox\CashFlow.Transactions.Outbox.csproj", "{B4436637-F6F3-467B-BBE3-43D150025DED}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CashFlow.Transactions.Web", "src\CashFlow.Transactions.Web\CashFlow.Transactions.Web.csproj", "{4A5414BA-5F35-4406-ABD6-83F29034EFF8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,6 +33,14 @@ Global
 		{75CBBE98-255E-4769-B303-11C4FB2C6A73}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{75CBBE98-255E-4769-B303-11C4FB2C6A73}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{75CBBE98-255E-4769-B303-11C4FB2C6A73}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B4436637-F6F3-467B-BBE3-43D150025DED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B4436637-F6F3-467B-BBE3-43D150025DED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B4436637-F6F3-467B-BBE3-43D150025DED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B4436637-F6F3-467B-BBE3-43D150025DED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4A5414BA-5F35-4406-ABD6-83F29034EFF8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4A5414BA-5F35-4406-ABD6-83F29034EFF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4A5414BA-5F35-4406-ABD6-83F29034EFF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4A5414BA-5F35-4406-ABD6-83F29034EFF8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -40,5 +52,7 @@ Global
 		{617F8524-D31B-4F07-93B5-A63EBC8BA84C} = {8113DF13-BA8D-43DB-B92A-96E67DCF3BFC}
 		{5A806FDB-6A54-4ED2-9210-1EE73B15BD2E} = {8113DF13-BA8D-43DB-B92A-96E67DCF3BFC}
 		{75CBBE98-255E-4769-B303-11C4FB2C6A73} = {8113DF13-BA8D-43DB-B92A-96E67DCF3BFC}
+		{B4436637-F6F3-467B-BBE3-43D150025DED} = {8113DF13-BA8D-43DB-B92A-96E67DCF3BFC}
+		{4A5414BA-5F35-4406-ABD6-83F29034EFF8} = {8113DF13-BA8D-43DB-B92A-96E67DCF3BFC}
 	EndGlobalSection
 EndGlobal
