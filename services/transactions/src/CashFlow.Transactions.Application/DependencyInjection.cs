@@ -1,4 +1,4 @@
-﻿using CashFlow.Shared.Application.Common;
+using CashFlow.Shared.Application.Common;
 
 namespace CashFlow.Transactions.Application;
 

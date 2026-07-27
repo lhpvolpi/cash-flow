@@ -1,4 +1,4 @@
-﻿namespace CashFlow.Transactions.Application.Transactions.CreateTransaction.Commands;
+namespace CashFlow.Transactions.Application.Transactions.CreateTransaction.Commands;
 
 public class CreateTransactionCommandValidator : AbstractValidator<CreateTransactionCommand>
 {

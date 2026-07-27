@@ -1,10 +1,6 @@
-﻿global using System.Text;
+global using System.Text;
 global using System.Text.Json;
 global using Ardalis.Specification.EntityFrameworkCore;
-global using CashFlow.Consolidation.Application.Abstractions;
-global using CashFlow.Consolidation.Domain.Entities;
-global using CashFlow.Shared.Application.Abstractions;
-global using CashFlow.Shared.Domain.Entities;
 global using Microsoft.AspNetCore.Builder;
 global using Microsoft.EntityFrameworkCore;
 global using Microsoft.EntityFrameworkCore.Metadata.Builders;

@@ -1,4 +1,4 @@
-﻿namespace CashFlow.Shared.Application.Models;
+namespace CashFlow.Shared.Application.Models;
 
 public class PaginatedList<T>
 {

@@ -1,4 +1,4 @@
-﻿using CashFlow.Shared.Application.Models;
+using CashFlow.Shared.Application.Models;
 
 namespace CashFlow.Consolidation.Application.Abstractions;
 

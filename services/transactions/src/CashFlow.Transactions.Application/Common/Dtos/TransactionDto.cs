@@ -1,4 +1,4 @@
-﻿using CashFlow.Shared.Domain.Enums;
+using CashFlow.Shared.Domain.Enums;
 
 namespace CashFlow.Transactions.Application.Common.Dtos;
 

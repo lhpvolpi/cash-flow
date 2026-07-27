@@ -1,4 +1,4 @@
-.PHONY: help up down restart logs clean build run-transactions-web run-transactions-worker run-consolidation-web run-consolidation-consumer add-migration-transactions add-migration-consolidation migrate-transactions migrate-consolidation test stop clear restore rebuild
+.PHONY: help up down restart logs clean publish-all up-all down-all logs-all build run-transactions-web run-transactions-worker run-consolidation-web run-consolidation-consumer add-migration-transactions add-migration-consolidation migrate-transactions migrate-consolidation test stop clear restore rebuild
 
 help:
 	@echo "CashFlow - Comandos disponíveis:"
@@ -10,6 +10,12 @@ help:
 	@echo "  make logs            - Ver logs dos containers"
 	@echo "  make clean           - Limpar containers e volumes"
 	@echo ""
+	@echo "🐳 Docker (stack completa, incluindo os 4 serviços .NET):"
+	@echo "  make up-all          - dotnet publish dos 4 serviços + subir Postgres, RabbitMQ e todos eles"
+	@echo "  make publish-all     - Só gerar o publish dos 4 serviços (sem subir containers)"
+	@echo "  make down-all        - Parar toda a stack (infra + serviços)"
+	@echo "  make logs-all        - Ver logs de toda a stack"
+	@echo ""
 	@echo "🔨 Build:"
 	@echo "  make restore         - Restaurar dependências NuGet"
 	@echo "  make build           - Build de todos os projetos"
@@ -17,8 +23,8 @@ help:
 	@echo "  make clear           - Limpar bin/ e obj/"
 	@echo ""
 	@echo "🚀 Executar:"
-	@echo "  make run-transactions-web         - Rodar Web API (Transactions)"
-	@echo "  make run-transactions-worker      - Rodar Outbox Worker"
+	@echo "  make run-transactions-web         - Rodar Transactions Web"
+	@echo "  make run-transactions-worker      - Rodar Transactions Outbox Worker"
 	@echo "  make run-consolidation-web        - Rodar Consolidation Web"
 	@echo "  make run-consolidation-consumer   - Rodar Consolidation Consumer"
 	@echo ""
@@ -33,6 +39,7 @@ help:
 	@echo ""
 	@echo "⛔ Utilitários:"
 	@echo "  make stop                         - Parar processos .NET em execução"
+	@echo "  make format                       - Formatar código"
 
 # Docker
 up:
@@ -52,6 +59,24 @@ logs:
 clean:
 	docker-compose down -v
 	@echo "✅ Containers e volumes removidos"
+
+publish-all:
+	dotnet publish services/transactions/src/CashFlow.Transactions.Web/CashFlow.Transactions.Web.csproj -c Release -o services/transactions/src/CashFlow.Transactions.Web/publish
+	dotnet publish services/transactions/src/CashFlow.Transactions.Outbox/CashFlow.Transactions.Outbox.csproj -c Release -o services/transactions/src/CashFlow.Transactions.Outbox/publish
+	dotnet publish services/consolidation/src/CashFlow.Consolidation.Web/CashFlow.Consolidation.Web.csproj -c Release -o services/consolidation/src/CashFlow.Consolidation.Web/publish
+	dotnet publish services/consolidation/src/CashFlow.Consolidation.Consumer/CashFlow.Consolidation.Consumer.csproj -c Release -o services/consolidation/src/CashFlow.Consolidation.Consumer/publish
+	@echo "✅ Publish gerado para os 4 serviços"
+
+up-all: publish-all
+	docker-compose --profile app up -d --build
+	@echo "✅ Stack completa iniciada (Postgres, RabbitMQ, Transactions e Consolidation)"
+
+down-all:
+	docker-compose --profile app down
+	@echo "✅ Stack completa parada"
+
+logs-all:
+	docker-compose --profile app logs -f
 
 # Build
 restore:
@@ -111,3 +136,7 @@ test:
 stop:
 	pkill -f dotnet || true
 	@echo "✅ Processos .NET parados"
+
+format:
+	dotnet format CashFlow.sln
+	@echo "✅ Código formatado"

@@ -1,8 +1,8 @@
-﻿using CashFlow.Shared.Application.Abstractions;
+using CashFlow.Shared.Application.Abstractions;
 using CashFlow.Shared.Application.Common;
+using CashFlow.Shared.Application.Common.Events;
 using CashFlow.Transactions.Application.Abstractions;
 using CashFlow.Transactions.Application.Common.Dtos;
-using CashFlow.Transactions.Application.Common.Events;
 using CashFlow.Transactions.Domain.Entities;
 
 namespace CashFlow.Transactions.Application.Transactions.CreateTransaction.Commands;
@@ -53,11 +53,11 @@ public class CreateTransactionCommandHandler : IRequestHandler<CreateTransaction
 
     private static OutboxMessage CreateOutboxMessage(Transaction transaction)
     {
-        var transactionOperationEventPayload = new TransactionOperationEventPayload(
+        var transactionOperationEventPayload = new OperationEventPayload(
             transaction.Id,
             transaction.Amount,
             transaction.Type,
-            ETransactionOperationEventType.TransactionCreated,
+            EOperationEventType.TransactionCreated,
             DateTimeOffset.UtcNow);
 
         var jsonDocument = transactionOperationEventPayload.ToJsonDocument();

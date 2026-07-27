@@ -1,7 +1,8 @@
-﻿global using System.Reflection;
+global using System.Reflection;
 global using Ardalis.Specification;
 global using CashFlow.Consolidation.Application.Abstractions;
 global using CashFlow.Consolidation.Application.Common.Dtos;
+global using CashFlow.Consolidation.Application.DailyBalances.ProcessTransactionEvent.Specifications;
 global using CashFlow.Consolidation.Application.DailyBalances.Shared.Specifications;
 global using CashFlow.Consolidation.Domain.Entities;
 global using CashFlow.Shared.Application.Abstractions;

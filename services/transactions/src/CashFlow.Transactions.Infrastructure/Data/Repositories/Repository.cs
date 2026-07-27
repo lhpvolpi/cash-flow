@@ -1,4 +1,4 @@
-﻿using CashFlow.Infrastructure.Data;
+using CashFlow.Infrastructure.Data;
 using CashFlow.Shared.Application.Abstractions;
 using CashFlow.Shared.Domain.Entities;
 

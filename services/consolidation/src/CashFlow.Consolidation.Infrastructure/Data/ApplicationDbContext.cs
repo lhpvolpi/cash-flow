@@ -1,3 +1,5 @@
+using CashFlow.Consolidation.Domain.Entities;
+
 namespace CashFlow.Consolidation.Infrastructure.Data;
 
 public class ApplicationDbContext : DbContext
@@ -5,6 +7,8 @@ public class ApplicationDbContext : DbContext
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
     public DbSet<DailyBalance> DailyBalances => Set<DailyBalance>();
+
+    public DbSet<ProcessedTransaction> ProcessedTransactions => Set<ProcessedTransaction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

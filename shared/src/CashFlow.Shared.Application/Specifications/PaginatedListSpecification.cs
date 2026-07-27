@@ -1,4 +1,4 @@
-﻿namespace CashFlow.Shared.Application.Specifications;
+namespace CashFlow.Shared.Application.Specifications;
 
 public class PaginatedListSpecification<TEntity> : Specification<TEntity> where TEntity : class
 {

@@ -1,4 +1,3 @@
-﻿global using System.Text;
 global using System.Text.Json;
 global using Ardalis.Specification;
 global using Ardalis.Specification.EntityFrameworkCore;

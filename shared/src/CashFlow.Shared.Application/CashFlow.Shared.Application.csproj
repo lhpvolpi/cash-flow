@@ -11,4 +11,7 @@
 		<PackageReference Include="MediatR" Version="12.5.0" />
 		<PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.10" />
 	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\CashFlow.Shared.Domain\CashFlow.Shared.Domain.csproj" />
+	</ItemGroup>
 </Project>

@@ -1,4 +1,4 @@
-﻿using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
+using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 
 namespace CashFlow.Transactions.Web;
 

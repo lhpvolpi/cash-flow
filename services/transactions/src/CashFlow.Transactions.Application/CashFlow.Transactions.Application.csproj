@@ -6,9 +6,7 @@
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
 	<ItemGroup>
-		<ProjectReference
-			Include="..\CashFlow.Transactions.Domain\CashFlow.Transactions.Domain.csproj" />
-		<ProjectReference
-			Include="..\..\..\..\shared\src\CashFlow.Shared.Application\CashFlow.Shared.Application.csproj" />
+		<ProjectReference Include="..\CashFlow.Transactions.Domain\CashFlow.Transactions.Domain.csproj" />
+		<ProjectReference Include="..\..\..\..\shared\src\CashFlow.Shared.Application\CashFlow.Shared.Application.csproj" />
 	</ItemGroup>
 </Project>

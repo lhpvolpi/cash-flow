@@ -1,88 +1,97 @@
-﻿using CashFlow.Transactions.Application.OutboxMessages.PublishMessage.Commands;
+using CashFlow.Transactions.Application.OutboxMessages.PublishMessage.Commands;
 
 namespace CashFlow.Transactions.Outbox;
 
-public class PublishOutboxMessagesWorker : IHostedService, IDisposable
+public sealed class PublishOutboxMessagesWorker : BackgroundService
 {
     private const string LogPrefix = "PublishOutboxMessages";
 
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<PublishOutboxMessagesWorker> _logger;
-
-    private readonly int _intervalInMilliseconds;
+    private readonly TimeSpan _interval;
     private readonly int _batchSize;
 
-    private Timer? _timer;
-    private bool _disposed;
-
-    public PublishOutboxMessagesWorker(IServiceProvider serviceProvider, IConfiguration configuration, ILogger<PublishOutboxMessagesWorker> logger)
+    public PublishOutboxMessagesWorker(
+        IServiceScopeFactory scopeFactory,
+        IConfiguration configuration,
+        ILogger<PublishOutboxMessagesWorker> logger)
     {
-        _serviceProvider = serviceProvider;
+        _scopeFactory = scopeFactory;
         _logger = logger;
 
-        _intervalInMilliseconds = configuration.GetValue("Outbox:IntervalInMilliseconds", 500);
+        var intervalInMilliseconds =
+            configuration.GetValue("Outbox:IntervalInMilliseconds", 500);
+
+        _interval = TimeSpan.FromMilliseconds(intervalInMilliseconds);
         _batchSize = configuration.GetValue("Outbox:BatchSize", 100);
     }
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(
+        CancellationToken stoppingToken)
     {
-        _logger.LogInformation("{LogPrefix} starting at: {Time}", LogPrefix, DateTimeOffset.UtcNow);
+        _logger.LogInformation(
+            "{LogPrefix} started. Interval: {Interval}ms, BatchSize: {BatchSize}",
+            LogPrefix,
+            _interval.TotalMilliseconds,
+            _batchSize);
 
-        var intervalTimeSpan = TimeSpan.FromMilliseconds(_intervalInMilliseconds);
-        _timer = new Timer(async _ => await ExecuteTask(), null, intervalTimeSpan, intervalTimeSpan);
+        using var timer = new PeriodicTimer(_interval);
 
-        _logger.LogInformation("{LogPrefix} started", LogPrefix);
-        return Task.CompletedTask;
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken)
-    {
-        _logger.LogInformation("{LogPrefix} stopping at: {Time}", LogPrefix, DateTimeOffset.UtcNow);
-
-        _timer?.Change(Timeout.Infinite, 0);
-
-        _logger.LogInformation("{LogPrefix} stopped", LogPrefix);
-
-        return Task.CompletedTask;
-    }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!_disposed)
+        try
         {
-            if (disposing)
+            while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                _timer?.Dispose();
+                await PublishMessagesAsync(stoppingToken);
             }
-
-            _disposed = true;
+        }
+        catch (OperationCanceledException)
+            when (stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogInformation(
+                "{LogPrefix} cancellation requested",
+                LogPrefix);
+        }
+        finally
+        {
+            _logger.LogInformation(
+                "{LogPrefix} stopped",
+                LogPrefix);
         }
     }
 
-    private async Task ExecuteTask()
+    private async Task PublishMessagesAsync(
+        CancellationToken cancellationToken)
     {
         try
         {
-            _logger.LogInformation("{LogPrefix} executing at: {Time}", LogPrefix, DateTimeOffset.UtcNow);
+            _logger.LogDebug(
+                "{LogPrefix} execution started",
+                LogPrefix);
 
-            await using var scope = _serviceProvider.CreateAsyncScope();
-            var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+            await using var scope = _scopeFactory.CreateAsyncScope();
+
+            var mediator =
+                scope.ServiceProvider.GetRequiredService<IMediator>();
 
             var command = new PublishOutboxMessagesCommand(_batchSize);
-            await mediator.Send(command);
 
-            _logger.LogInformation("{LogPrefix} executed successfully at: {Time}", LogPrefix, DateTimeOffset.UtcNow);
+            await mediator.Send(command, cancellationToken);
+
+            _logger.LogDebug(
+                "{LogPrefix} execution completed successfully",
+                LogPrefix);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error occurred while executing {LogPrefix} at: {Time}", LogPrefix, DateTimeOffset.UtcNow);
+            _logger.LogError(
+                ex,
+                "{LogPrefix} execution failed",
+                LogPrefix);
         }
     }
 }
-

@@ -1,4 +1,4 @@
-﻿namespace CashFlow.Shared.Application.Common;
+namespace CashFlow.Shared.Application.Common;
 
 public class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse> where TRequest : IRequest<TResponse>
 {

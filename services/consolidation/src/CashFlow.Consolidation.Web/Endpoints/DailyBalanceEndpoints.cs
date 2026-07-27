@@ -23,7 +23,9 @@ public static class DailyBalanceEndpoints
         var result = await sender.Send(query, cancellationToken);
 
         if (result is null)
+        {
             return Results.NotFound(new { message = $"No daily balance found for date {date:yyyy-MM-dd}" });
+        }
 
         return Results.Ok(result);
     }

@@ -1,4 +1,3 @@
-﻿global using System.Security;
 global using System.Text.Json;
 global using System.Text.Json.Serialization;
 global using CashFlow.Infrastructure.Data;

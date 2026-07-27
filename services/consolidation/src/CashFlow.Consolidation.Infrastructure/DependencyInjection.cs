@@ -1,6 +1,8 @@
+using CashFlow.Consolidation.Application.Abstractions;
 using CashFlow.Consolidation.Infrastructure.Data;
 using CashFlow.Consolidation.Infrastructure.Data.Repositories;
 using CashFlow.Consolidation.Infrastructure.MessageBroker;
+using CashFlow.Shared.Application.Abstractions;
 using CashFlow.Shared.Application.Models;
 
 namespace CashFlow.Consolidation.Infrastructure;
@@ -19,6 +21,7 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IDailyBalanceRepository, DailyBalanceRepository>();
+        services.AddScoped<IProcessedTransactionRepository, ProcessedTransactionRepository>();
 
         // RabbitMQ
         var rabbitMqConnectionString = configuration.GetConnectionString("RabbitMq")
@@ -28,7 +31,8 @@ public static class DependencyInjection
         {
             var factory = new ConnectionFactory()
             {
-                Uri = new Uri(rabbitMqConnectionString)
+                Uri = new Uri(rabbitMqConnectionString),
+                DispatchConsumersAsync = true
             };
             return factory.CreateConnection();
         });

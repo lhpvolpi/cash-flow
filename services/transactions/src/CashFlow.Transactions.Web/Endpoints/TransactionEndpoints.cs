@@ -1,4 +1,4 @@
-﻿using CashFlow.Transactions.Application.Transactions.CreateTransaction.Commands;
+using CashFlow.Transactions.Application.Transactions.CreateTransaction.Commands;
 using CashFlow.Transactions.Application.Transactions.ListTransactions.Queries;
 
 namespace CashFlow.Transactions.Web.Endpoints;

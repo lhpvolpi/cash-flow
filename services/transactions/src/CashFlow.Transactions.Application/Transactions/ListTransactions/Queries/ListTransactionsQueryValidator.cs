@@ -1,4 +1,4 @@
-﻿namespace CashFlow.Transactions.Application.Transactions.ListTransactions.Queries;
+namespace CashFlow.Transactions.Application.Transactions.ListTransactions.Queries;
 
 public class ListTransactionsQueryValidator : AbstractValidator<ListTransactionsQuery>
 {

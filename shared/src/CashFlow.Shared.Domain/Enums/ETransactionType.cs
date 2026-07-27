@@ -1,4 +1,4 @@
-﻿namespace CashFlow.Shared.Domain.Enums;
+namespace CashFlow.Shared.Domain.Enums;
 
 public enum ETransactionType
 {

@@ -1,4 +1,4 @@
-﻿using CashFlow.Shared.Application.Models;
+using CashFlow.Shared.Application.Models;
 using CashFlow.Transactions.Application.Abstractions;
 using CashFlow.Transactions.Application.Common.Dtos;
 using CashFlow.Transactions.Application.Transactions.ListTransactions.Specifications;

@@ -1,4 +1,4 @@
-﻿using CashFlow.Transactions.Application;
+using CashFlow.Transactions.Application;
 using CashFlow.Transactions.Infrastructure;
 using CashFlow.Transactions.Outbox;
 
@@ -19,17 +19,6 @@ var host = Host.CreateDefaultBuilder(args)
             .AddCheck("/health", () => HealthCheckResult.Healthy());
 
         services.AddHostedService<PublishOutboxMessagesWorker>();
-    })
-    .ConfigureWebHostDefaults(builder =>
-    {
-        builder.Configure(app =>
-        {
-            app.UseRouting();
-            app.UseEndpoints(endpoints =>
-            {
-                endpoints.MapHealthChecks("/health");
-            });
-        });
     })
     .Build();
 

@@ -1,4 +1,4 @@
-﻿using CashFlow.Shared.Domain.Entities;
+using CashFlow.Shared.Domain.Entities;
 
 namespace CashFlow.Transactions.Domain.Entities;
 

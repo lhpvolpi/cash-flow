@@ -1,4 +1,4 @@
-﻿namespace CashFlow.Shared.Application.Common;
+namespace CashFlow.Shared.Application.Common;
 
 public class ValidationException : Exception
 {

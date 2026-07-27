@@ -1,4 +1,4 @@
-﻿using CashFlow.Shared.Application.Abstractions;
+using CashFlow.Shared.Application.Abstractions;
 using CashFlow.Transactions.Domain.Entities;
 
 namespace CashFlow.Transactions.Application.Abstractions;

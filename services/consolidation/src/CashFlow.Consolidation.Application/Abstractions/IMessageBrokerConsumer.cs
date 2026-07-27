@@ -1,4 +1,4 @@
-﻿namespace CashFlow.Consolidation.Application.Abstractions;
+namespace CashFlow.Consolidation.Application.Abstractions;
 
 public interface IMessageBrokerConsumer<out TMessage>
 {

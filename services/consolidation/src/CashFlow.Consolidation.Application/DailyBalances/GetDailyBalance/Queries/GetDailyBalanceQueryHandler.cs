@@ -17,7 +17,9 @@ public class GetDailyBalanceQueryHandler : IRequestHandler<GetDailyBalanceQuery,
         var dailyBalance = await _dailyBalanceRepository.FirstOrDefaultAsync(spec, cancellationToken);
 
         if (dailyBalance is null)
+        {
             return null;
+        }
 
         return new DailyBalanceDto(
             dailyBalance.Id,

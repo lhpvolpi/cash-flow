@@ -1,25 +1,36 @@
-﻿using CashFlow.Shared.Application.Models;
-
+using CashFlow.Consolidation.Application.Abstractions;
+using CashFlow.Shared.Application.Common;
+using CashFlow.Shared.Application.Models;
 
 namespace CashFlow.Consolidation.Infrastructure.MessageBroker;
 
-public sealed class RabbitMqMessageBrokerConsumer : IConsolidationMessageBrokerConsumer, IDisposable
+public sealed class RabbitMqMessageBrokerConsumer
+    : IConsolidationMessageBrokerConsumer
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions =
+        new(JsonSerializerDefaults.Web)
+        {
+            Converters =
+            {
+                new JsonEnumConverterFactory()
+            }
+        };
 
     private readonly IConnection _connection;
     private readonly ILogger<RabbitMqMessageBrokerConsumer> _logger;
-    private IModel? _channel;
+    private readonly int _maxRetries;
+    private readonly int _retryDelayMilliseconds;
 
     public RabbitMqMessageBrokerConsumer(
         IConnection connection,
+        IConfiguration configuration,
         ILogger<RabbitMqMessageBrokerConsumer> logger)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(logger);
-
         _connection = connection;
         _logger = logger;
+
+        _maxRetries = configuration.GetValue<int?>("MessageBroker:MaxRetries") ?? 5;
+        _retryDelayMilliseconds = configuration.GetValue<int?>("MessageBroker:RetryDelayMilliseconds") ?? 5000;
     }
 
     public async Task StartConsumingAsync(
@@ -30,44 +41,193 @@ public sealed class RabbitMqMessageBrokerConsumer : IConsolidationMessageBrokerC
         ArgumentException.ThrowIfNullOrWhiteSpace(queueName);
         ArgumentNullException.ThrowIfNull(messageHandler);
 
-        _channel = _connection.CreateModel();
+        var retryQueueName = $"{queueName}.retry";
+        var failedQueueName = $"{queueName}.failed";
 
-        // Declare queue
-        _channel.QueueDeclare(queue: queueName, durable: true, exclusive: false, autoDelete: false);
+        using var channel = _connection.CreateModel();
 
-        var consumer = new AsyncEventingBasicConsumer(_channel);
+        channel.QueueDeclare(
+            queue: failedQueueName,
+            durable: true,
+            exclusive: false,
+            autoDelete: false);
 
-        consumer.Received += async (model, ea) =>
+        channel.QueueDeclare(
+            queue: retryQueueName,
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            arguments: new Dictionary<string, object>
+            {
+                ["x-message-ttl"] = _retryDelayMilliseconds,
+                ["x-dead-letter-exchange"] = string.Empty,
+                ["x-dead-letter-routing-key"] = queueName
+            });
+
+        channel.QueueDeclare(
+            queue: queueName,
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            arguments: new Dictionary<string, object>
+            {
+                ["x-dead-letter-exchange"] = string.Empty,
+                ["x-dead-letter-routing-key"] = retryQueueName
+            });
+
+        channel.BasicQos(
+            prefetchSize: 0,
+            prefetchCount: 1,
+            global: false);
+
+        var consumer = new AsyncEventingBasicConsumer(channel);
+
+        consumer.Received += async (_, args) =>
         {
+            var attempt = GetDeathCount(args.BasicProperties, retryQueueName) + 1;
+
             try
             {
-                var body = ea.Body.ToArray();
-                var json = Encoding.UTF8.GetString(body);
-                var message = JsonSerializer.Deserialize<BrokerMessage>(json, JsonOptions);
+                var message = Deserialize(args.Body);
 
-                if (message != null)
+                if (message is null)
                 {
-                    await messageHandler(message, cancellationToken);
-                    _channel.BasicAck(ea.DeliveryTag, false);
+                    _logger.LogWarning(
+                        "Could not deserialize message {DeliveryTag} from queue {QueueName} (attempt {Attempt}/{MaxRetries})",
+                        args.DeliveryTag,
+                        queueName,
+                        attempt,
+                        _maxRetries);
+
+                    HandleFailure(channel, args, attempt, failedQueueName);
+
+                    return;
                 }
+
+                await messageHandler(message, cancellationToken);
+
+                channel.BasicAck(
+                    deliveryTag: args.DeliveryTag,
+                    multiple: false);
+            }
+            catch (OperationCanceledException)
+                when (cancellationToken.IsCancellationRequested)
+            {
+                channel.BasicNack(
+                    deliveryTag: args.DeliveryTag,
+                    multiple: false,
+                    requeue: true);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing message from queue {QueueName}", queueName);
-                _channel.BasicNack(ea.DeliveryTag, false, true); // Requeue
+                _logger.LogError(
+                    ex,
+                    "Error processing message {DeliveryTag} from queue {QueueName} (attempt {Attempt}/{MaxRetries})",
+                    args.DeliveryTag,
+                    queueName,
+                    attempt,
+                    _maxRetries);
+
+                HandleFailure(channel, args, attempt, failedQueueName);
             }
         };
 
-        _channel.BasicConsume(queue: queueName, autoAck: false, consumer: consumer);
+        channel.BasicConsume(
+            queue: queueName,
+            autoAck: false,
+            consumer: consumer);
 
-        _logger.LogInformation("Started consuming from queue {QueueName}", queueName);
+        _logger.LogInformation(
+            "Started consuming queue {QueueName}",
+            queueName);
 
-        // Keep consuming until cancellation
-        await Task.Delay(Timeout.Infinite, cancellationToken);
+        try
+        {
+            await Task.Delay(
+                Timeout.InfiniteTimeSpan,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation(
+                "Stopped consuming queue {QueueName}",
+                queueName);
+        }
     }
 
-    public void Dispose()
+    private void HandleFailure(
+        IModel channel,
+        BasicDeliverEventArgs args,
+        int attempt,
+        string failedQueueName)
     {
-        _channel?.Dispose();
+        if (attempt >= _maxRetries)
+        {
+            _logger.LogError(
+                "Message {DeliveryTag} exceeded {MaxRetries} attempts, moving to {FailedQueue}",
+                args.DeliveryTag,
+                _maxRetries,
+                failedQueueName);
+
+            channel.BasicPublish(
+                exchange: string.Empty,
+                routingKey: failedQueueName,
+                basicProperties: args.BasicProperties,
+                body: args.Body);
+
+            channel.BasicAck(
+                deliveryTag: args.DeliveryTag,
+                multiple: false);
+
+            return;
+        }
+
+        channel.BasicNack(
+            deliveryTag: args.DeliveryTag,
+            multiple: false,
+            requeue: false);
+    }
+
+    private static int GetDeathCount(IBasicProperties properties, string retryQueueName)
+    {
+        if (properties?.Headers is null
+            || !properties.Headers.TryGetValue("x-death", out var raw)
+            || raw is not List<object> deaths)
+        {
+            return 0;
+        }
+
+        foreach (var entry in deaths)
+        {
+            if (entry is not Dictionary<string, object> death
+                || !death.TryGetValue("queue", out var queueValue))
+            {
+                continue;
+            }
+
+            var queue = queueValue switch
+            {
+                byte[] bytes => Encoding.UTF8.GetString(bytes),
+                string text => text,
+                _ => null
+            };
+
+            if (queue == retryQueueName
+                && death.TryGetValue("count", out var countValue)
+                && countValue is long count)
+            {
+                return (int)count;
+            }
+        }
+
+        return 0;
+    }
+
+    private static BrokerMessage? Deserialize(ReadOnlyMemory<byte> body)
+    {
+        return JsonSerializer.Deserialize<BrokerMessage>(
+            body.Span,
+            JsonOptions);
     }
 }

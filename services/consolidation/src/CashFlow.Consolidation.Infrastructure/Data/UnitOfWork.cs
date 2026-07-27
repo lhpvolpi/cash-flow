@@ -1,3 +1,5 @@
+using CashFlow.Shared.Application.Abstractions;
+
 namespace CashFlow.Consolidation.Infrastructure.Data;
 
 public class UnitOfWork : IUnitOfWork, IAsyncDisposable

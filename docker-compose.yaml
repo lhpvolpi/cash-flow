@@ -42,6 +42,86 @@ services:
     networks:
       - cash-flow-network
 
+  transactions-web:
+    build:
+      context: services/transactions/src/CashFlow.Transactions.Web
+    profiles: ["app"]
+    restart: always
+    container_name: cash-flow-transactions-web
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=transactions;Username=postgres;Password=postgres
+      - ConnectionStrings__RabbitMq=amqp://guest:guest@rabbitmq:5672/
+    ports:
+      - "5222:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - cash-flow-network
+
+  transactions-outbox:
+    build:
+      context: services/transactions/src/CashFlow.Transactions.Outbox
+    profiles: ["app"]
+    restart: always
+    container_name: cash-flow-transactions-outbox
+    environment:
+      - DOTNET_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=transactions;Username=postgres;Password=postgres
+      - ConnectionStrings__RabbitMq=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      transactions-web:
+        condition: service_started
+    networks:
+      - cash-flow-network
+
+  consolidation-web:
+    build:
+      context: services/consolidation/src/CashFlow.Consolidation.Web
+    profiles: ["app"]
+    restart: always
+    container_name: cash-flow-consolidation-web
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=consolidation;Username=postgres;Password=postgres
+      - ConnectionStrings__RabbitMq=amqp://guest:guest@rabbitmq:5672/
+    ports:
+      - "5224:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - cash-flow-network
+
+  consolidation-consumer:
+    build:
+      context: services/consolidation/src/CashFlow.Consolidation.Consumer
+    profiles: ["app"]
+    restart: always
+    container_name: cash-flow-consolidation-consumer
+    environment:
+      - DOTNET_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=consolidation;Username=postgres;Password=postgres
+      - ConnectionStrings__RabbitMq=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      consolidation-web:
+        condition: service_started
+    networks:
+      - cash-flow-network
+
 volumes:
   postgres-data:
   rabbitmq-data:

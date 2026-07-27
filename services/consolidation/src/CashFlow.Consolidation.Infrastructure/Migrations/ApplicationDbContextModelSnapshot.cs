@@ -58,6 +58,47 @@ namespace CashFlow.Consolidation.Infrastructure.Migrations
 
                     b.ToTable("daily_balances", (string)null);
                 });
+
+            modelBuilder.Entity("CashFlow.Consolidation.Domain.Entities.ProcessedTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasColumnOrder(1);
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DailyBalanceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("daily_balance_id")
+                        .HasColumnOrder(3);
+
+                    b.Property<Guid>("TransactionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("transaction_id")
+                        .HasColumnOrder(2);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DailyBalanceId");
+
+                    b.HasIndex("TransactionId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_processed_transaction_transaction_id");
+
+                    b.ToTable("processed_transactions", (string)null);
+                });
+
+            modelBuilder.Entity("CashFlow.Consolidation.Domain.Entities.ProcessedTransaction", b =>
+                {
+                    b.HasOne("CashFlow.Consolidation.Domain.Entities.DailyBalance", null)
+                        .WithMany()
+                        .HasForeignKey("DailyBalanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

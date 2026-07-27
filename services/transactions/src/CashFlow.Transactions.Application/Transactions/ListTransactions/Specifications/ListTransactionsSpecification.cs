@@ -1,4 +1,4 @@
-﻿using CashFlow.Shared.Application.Specifications;
+using CashFlow.Shared.Application.Specifications;
 using CashFlow.Transactions.Domain.Entities;
 
 namespace CashFlow.Transactions.Application.Transactions.ListTransactions.Specifications

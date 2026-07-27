@@ -1,3 +1,4 @@
+using CashFlow.Shared.Application.Common;
 using CashFlow.Shared.Application.Models;
 using CashFlow.Transactions.Application.Abstractions;
 
@@ -5,13 +6,21 @@ namespace CashFlow.Transactions.Infrastructure.MessageBroker;
 
 public sealed class RabbitMqOutboxBrokerPublisher : IOutboxBrokerPublisher, IDisposable
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private const int MaxRetries = 3;
-    private const int BaseDelayMs = 100;
+    private const int MaxAttempts = 3;
+    private const int BaseRetryDelayMilliseconds = 100;
+
+    private static readonly JsonSerializerOptions JsonOptions =
+        new(JsonSerializerDefaults.Web)
+        {
+            Converters =
+            {
+                new JsonEnumConverterFactory()
+            }
+        };
 
     private readonly IModel _channel;
     private readonly ILogger<RabbitMqOutboxBrokerPublisher> _logger;
-    private readonly object _publishLock = new();
+    private readonly object _channelLock = new();
 
     public RabbitMqOutboxBrokerPublisher(
         IConnection connection,
@@ -22,7 +31,6 @@ public sealed class RabbitMqOutboxBrokerPublisher : IOutboxBrokerPublisher, IDis
 
         _logger = logger;
         _channel = connection.CreateModel();
-
         _channel.ConfirmSelect();
     }
 
@@ -34,90 +42,96 @@ public sealed class RabbitMqOutboxBrokerPublisher : IOutboxBrokerPublisher, IDis
         ArgumentException.ThrowIfNullOrWhiteSpace(queueName);
         ArgumentNullException.ThrowIfNull(message);
 
-        cancellationToken.ThrowIfCancellationRequested();
+        var body = JsonSerializer.SerializeToUtf8Bytes(
+            message,
+            JsonOptions);
 
-        await Task.Run(() => PublishWithRetryAsync(queueName, message, cancellationToken), cancellationToken);
-    }
-
-    private async Task PublishWithRetryAsync(
-        string queueName,
-        BrokerMessage message,
-        CancellationToken cancellationToken)
-    {
-        var payload = JsonSerializer.Serialize(message, JsonOptions);
-        var body = Encoding.UTF8.GetBytes(payload);
-        int attempt = 0;
-
-        while (attempt < MaxRetries)
+        for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
-                attempt++;
-
-                lock (_publishLock)
-                {
-                    // Declare queue if it doesn't exist
-                    _channel.QueueDeclare(
-                        queue: queueName,
-                        durable: true,
-                        exclusive: false,
-                        autoDelete: false,
-                        arguments: null);
-
-                    var properties = _channel.CreateBasicProperties();
-
-                    properties.Persistent = true;
-                    properties.ContentType = "application/json";
-                    properties.ContentEncoding = "utf-8";
-                    properties.MessageId = message.Id.ToString();
-                    properties.Timestamp =
-                        new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-
-                    _channel.BasicPublish(
-                        exchange: string.Empty,
-                        routingKey: queueName,
-                        mandatory: true,
-                        basicProperties: properties,
-                        body: body);
-
-                    _channel.WaitForConfirmsOrDie();
-                }
+                Publish(queueName, message, body);
 
                 _logger.LogInformation(
-                    "Message {MessageId} published to queue {QueueName} (attempt {Attempt}/{MaxRetries})",
+                    "Message {MessageId} published to queue {QueueName}",
                     message.Id,
-                    queueName,
-                    attempt,
-                    MaxRetries);
+                    queueName);
 
-                return; // Success
+                return;
             }
-            catch (Exception exception) when (attempt < MaxRetries)
+            catch (OperationCanceledException)
+                when (cancellationToken.IsCancellationRequested)
             {
-                var delayMs = BaseDelayMs * (int)Math.Pow(2, attempt - 1);
+                throw;
+            }
+            catch (Exception ex) when (attempt < MaxAttempts)
+            {
+                var retryDelay = TimeSpan.FromMilliseconds(
+                    BaseRetryDelayMilliseconds * Math.Pow(2, attempt - 1));
 
                 _logger.LogWarning(
-                    exception,
-                    "Failed to publish message {MessageId} to queue {QueueName}. Attempt {Attempt}/{MaxRetries}. Retrying in {DelayMs}ms",
+                    ex,
+                    "Failed to publish message {MessageId} to queue {QueueName}. " +
+                    "Attempt {Attempt}/{MaxAttempts}",
                     message.Id,
                     queueName,
                     attempt,
-                    MaxRetries,
-                    delayMs);
+                    MaxAttempts);
 
-                await Task.Delay(delayMs, cancellationToken);
+                await Task.Delay(retryDelay, cancellationToken);
             }
-            catch (Exception exception)
+            catch (Exception ex)
             {
                 _logger.LogError(
-                    exception,
-                    "Failed to publish message {MessageId} to queue {QueueName} after {MaxRetries} attempts",
+                    ex,
+                    "Failed to publish message {MessageId} to queue {QueueName} " +
+                    "after {MaxAttempts} attempts",
                     message.Id,
                     queueName,
-                    MaxRetries);
+                    MaxAttempts);
 
                 throw;
             }
+        }
+    }
+
+    private void Publish(
+        string queueName,
+        BrokerMessage message,
+        ReadOnlyMemory<byte> body)
+    {
+        lock (_channelLock)
+        {
+            _channel.QueueDeclare(
+                queue: queueName,
+                durable: true,
+                exclusive: false,
+                autoDelete: false,
+                arguments: new Dictionary<string, object>
+                {
+                    ["x-dead-letter-exchange"] = string.Empty,
+                    ["x-dead-letter-routing-key"] = $"{queueName}.retry"
+                });
+
+            var properties = _channel.CreateBasicProperties();
+
+            properties.Persistent = true;
+            properties.ContentType = "application/json";
+            properties.ContentEncoding = "utf-8";
+            properties.MessageId = message.Id.ToString();
+            properties.Timestamp = new AmqpTimestamp(
+                DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+
+            _channel.BasicPublish(
+                exchange: string.Empty,
+                routingKey: queueName,
+                mandatory: true,
+                basicProperties: properties,
+                body: body);
+
+            _channel.WaitForConfirmsOrDie();
         }
     }
 

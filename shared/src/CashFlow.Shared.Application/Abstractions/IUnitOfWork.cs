@@ -1,4 +1,4 @@
-﻿namespace CashFlow.Shared.Application.Abstractions;
+namespace CashFlow.Shared.Application.Abstractions;
 
 public interface IUnitOfWork : IAsyncDisposable
 {

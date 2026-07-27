@@ -1,3 +1,5 @@
+using CashFlow.Consolidation.Domain.Entities;
+
 namespace CashFlow.Consolidation.Infrastructure.Data.Configurations;
 
 public class DailyBalanceConfiguration : IEntityTypeConfiguration<DailyBalance>

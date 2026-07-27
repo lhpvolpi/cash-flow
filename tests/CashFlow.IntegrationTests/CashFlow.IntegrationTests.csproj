@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.13.0" />
+    <PackageReference Include="Testcontainers.RabbitMq" Version="4.13.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\services\transactions\src\CashFlow.Transactions.Application\CashFlow.Transactions.Application.csproj" />
+    <ProjectReference Include="..\..\services\transactions\src\CashFlow.Transactions.Infrastructure\CashFlow.Transactions.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\services\consolidation\src\CashFlow.Consolidation.Application\CashFlow.Consolidation.Application.csproj" />
+    <ProjectReference Include="..\..\services\consolidation\src\CashFlow.Consolidation.Infrastructure\CashFlow.Consolidation.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

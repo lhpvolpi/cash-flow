@@ -1,0 +1,12 @@
+global using System.Text;
+global using System.Text.Json;
+global using MediatR;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.Extensions.Configuration;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Logging;
+global using Npgsql;
+global using RabbitMQ.Client;
+global using Testcontainers.PostgreSql;
+global using Testcontainers.RabbitMq;
+global using Xunit;
