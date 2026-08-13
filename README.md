@@ -1,5 +1,7 @@
 # CashFlow
 
+[![CI](https://github.com/lhpvolpi/cash-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/lhpvolpi/cash-flow/actions/workflows/ci.yml)
+
 Solução para o desafio de Arquiteto de Software: um comerciante precisa controlar o fluxo de caixa
 diário (lançamentos de débito/crédito) e consultar o saldo diário consolidado.
 
@@ -124,9 +126,9 @@ Veja `make help` para a lista completa de comandos (build, migrations, format, e
 | Serviço | Tipo | Porta / URL | Banco |
 | --- | --- | --- | --- |
 | CashFlow.Transactions.Web | API REST | `http://localhost:5222` | `transactions` |
-| CashFlow.Transactions.Outbox | Worker | — | `transactions` |
+| CashFlow.Transactions.Outbox | Worker | `http://localhost:5223` (só health) | `transactions` |
 | CashFlow.Consolidation.Web | API REST | `http://localhost:5224` | `consolidation` |
-| CashFlow.Consolidation.Consumer | Worker | — | `consolidation` |
+| CashFlow.Consolidation.Consumer | Worker | `http://localhost:5225` (só health) | `consolidation` |
 | PostgreSQL | Banco de dados | `localhost:5432` | `transactions`, `consolidation` |
 | RabbitMQ | Broker | AMQP `localhost:5672`, UI `localhost:15672` | — |
 
@@ -197,7 +199,19 @@ Se não houver saldo para a data, retorna `404 Not Found`.
 > (outbox → RabbitMQ → consumer), tipicamente de milissegundos em condições normais — isso é
 > intencional, é o preço da Transações não depender do Consolidado.
 
-Ambas as APIs expõem Swagger (`/swagger`) e um health check em `/health`.
+Ambas as APIs expõem Swagger (`/swagger`). Os 4 processos (as 2 APIs e os 2 workers) expõem dois
+endpoints de health check, no padrão liveness/readiness:
+
+- `/health/live` — sempre `Healthy` se o processo está de pé (não executa nenhuma dependência).
+- `/health/ready` — só fica `Healthy` se Postgres **e** RabbitMQ estiverem alcançáveis
+  ([AspNetCore.HealthChecks](https://github.com/Xabaril/AspNetCore.Diagnostics.HealthChecks) —
+  a Microsoft não tem pacote oficial para broker de mensagens, só para EF Core/Postgres).
+
+Nos workers (que não expõem nenhuma outra rota HTTP, sem Swagger/endpoints de negócio), isso é feito
+com `Host.CreateDefaultBuilder` + `.ConfigureWebHostDefaults(...)` só para mapear as duas rotas de
+health — sem migrar para `WebApplication`/Minimal APIs, mudança mínima em cima do worker já existente.
+Pensado para Kubernetes: `/health/live` vira `livenessProbe` (reinicia o pod), `/health/ready` vira
+`readinessProbe` (tira da rotação de tráfego/consumo enquanto a dependência estiver fora).
 
 ## Requisitos não funcionais — como foram endereçados
 
@@ -208,7 +222,40 @@ Ambas as APIs expõem Swagger (`/swagger`) e um health check em `/health`.
 - **"50 req/s no Consolidado, até 5% de perda"**: o consumer processa mensagens com confirmação
   manual (`ack`/`nack`) e um mecanismo de retry com atraso (fila de retry com TTL) + fila de
   dead-letter para mensagens que esgotam as tentativas — uma falha isolada não trava o restante da
-  fila nem gera reentrega infinita.
+  fila nem gera reentrega infinita. Validado empiricamente com um teste de carga (ver
+  [Teste de carga](#teste-de-carga) abaixo).
+
+### Teste de carga
+
+O Outbox já garante que um lançamento chega na fila (com retry próprio); o requisito de 50 req/s
+com até 5% de perda é, na prática, uma pergunta sobre o **consumer**: ele dá conta de processar e
+consolidar nessa taxa sem que mensagens se percam? Testar o `GET /api/daily-balances/{date}` não
+provaria isso — é uma leitura simples que passaria de qualquer forma.
+
+[`tools/CashFlow.LoadTest`](tools/CashFlow.LoadTest) publica mensagens sintéticas **diretamente**
+na fila `daily-balance-updates` (contornando Transactions/Outbox de propósito, para isolar o
+consumer), reaproveitando os mesmos tipos de produção (`BrokerMessage`, `OperationEventPayload`,
+serialização) usados pelo publisher real. Cada mensagem tem um `TransactionId` (Guid) único. Depois
+de publicar na taxa alvo, o teste espera uma janela de graça (tempo suficiente para o
+retry+dead-letter agirem) e consulta `processed_transactions` no Postgres para contar quantos
+`TransactionId`s publicados foram efetivamente consolidados.
+
+```bash
+# com o Consolidation.Consumer rodando (make up-all, ou local via make run-consolidation-consumer)
+make load-test                          # padrão: 50 msg/s por 60s
+make load-test RATE=100 DURATION=30     # ou taxa/duração customizadas
+# equivalente direto: dotnet run --project tools/CashFlow.LoadTest -- 50 60
+```
+
+Última execução (50 msg/s por 60s, 3000 mensagens):
+
+```text
+Mensagens enviadas:      3000
+Mensagens consolidadas:  3000
+Mensagens perdidas:      0
+Taxa de perda:           0,00%
+RESULTADO: dentro do limite de 5% de perda exigido pelo NFR.
+```
 
 ## Testes
 
@@ -217,16 +264,28 @@ make test
 # ou: dotnet test CashFlow.sln
 ```
 
-- **Unitários** (`*.Domain.Tests`, `*.Application.Tests` em cada serviço): regras de domínio
-  (`Transaction`, `DailyBalance`), handlers de Application com repositórios/unit of work mockados
-  (NSubstitute) e validadores (FluentValidation.TestHelper). Não precisam de Docker.
-- **Integração** (`tests/CashFlow.IntegrationTests`): sobe Postgres e RabbitMQ reais via
-  [Testcontainers](https://dotnet.testcontainers.org/) e exercita as classes de produção de ponta a
-  ponta — cria um lançamento, roda o publisher do outbox, consome da fila real com o
-  `RabbitMqMessageBrokerConsumer` de verdade e confere o saldo consolidado no banco; um segundo teste
-  publica uma mensagem que falha sempre e confirma que ela é movida para a fila de dead-letter. **Exige
-  Docker rodando localmente** (`make up` não é necessário — o teste sobe seus próprios containers
+Roda automaticamente a cada `push`/PR na `main` via
+[GitHub Actions](.github/workflows/ci.yml) (build + os 53 testes, incluindo os de integração —
+o runner do GitHub já vem com Docker, então o Testcontainers funciona sem configuração extra).
+
+- **Unitários** (`*.Domain.Tests`, `*.Application.Tests` em cada serviço, incluindo Auth): regras
+  de domínio (`Transaction`, `DailyBalance`), handlers de Application com repositórios/serviços
+  mockados (NSubstitute) e validadores (FluentValidation.TestHelper). Não precisam de Docker.
+- **Integração — Transactions/Consolidation** (`tests/CashFlow.IntegrationTests`): sobe Postgres e
+  RabbitMQ reais via [Testcontainers](https://dotnet.testcontainers.org/) e exercita as classes de
+  produção de ponta a ponta — cria um lançamento, roda o publisher do outbox, consome da fila real
+  com o `RabbitMqMessageBrokerConsumer` de verdade e confere o saldo consolidado no banco; um
+  segundo teste publica uma mensagem que falha sempre e confirma que ela é movida para a fila de
+  dead-letter; um terceiro par de testes resolve o `HealthCheckService` de cada serviço e confirma
+  que os checks de Postgres e RabbitMQ reportam `Healthy` contra dependências reais. **Exige Docker
+  rodando localmente** (`make up` não é necessário — o teste sobe seus próprios containers
   efêmeros).
+- **Integração — Auth** (`services/auth/tests/CashFlow.Auth.IntegrationTests`): sem Postgres/
+  RabbitMQ (o serviço não depende de nenhum dos dois), então monta o `ServiceProvider` real
+  (`AddApplicationServices` + `AddInfrastructureServices`) com configuração em memória e manda o
+  `LoginCommand` de verdade pelo `IMediator` — confere que o JWT emitido decodifica com
+  issuer/audience/subject corretos, que senha errada lança `InvalidCredentialsException`, e que
+  campos vazios lançam `ValidationException` pelo pipeline. Não exige Docker.
 
 Escrever o teste de integração revelou dois bugs reais que passaram despercebidos até então: a fila
 `daily-balance-updates` era declarada com argumentos diferentes pelo publisher do outbox e pelo
@@ -235,12 +294,61 @@ conexão do RabbitMQ do lado do Consolidado não habilitava `DispatchConsumersAs
 `AsyncEventingBasicConsumer` nunca recebia entregas — nenhum dos dois erros aparecia em teste unitário
 com mocks. Ambos foram corrigidos.
 
+## Serviço de Auth (em construção)
+
+Serviço de autenticação (`services/auth`) que emite um JWT a partir de usuário/senha — resposta
+ao item de segurança do feedback ("não foram identificados mecanismos de autenticação ou
+autorização nas APIs"). Já faz parte do `CashFlow.sln` principal (`dotnet build`/`dotnet test`/CI
+cobrem os 4 projetos + os 2 de teste normalmente), do `docker-compose.yaml` (serviço `auth-web`,
+perfil `app`) e do Makefile (`make run-auth-web`, incluído em `make up-all`/`make publish-all`).
+
+Mesma Clean Architecture dos outros serviços (Domain → Application → Infrastructure → Web):
+
+- **Domain**: `AuthToken` (Token, RefreshToken, ExpiresAtUtc).
+- **Application**: `LoginCommand`/`LoginCommandHandler`/`LoginCommandValidator`
+  (`AuthTokens/Login/Commands`), `IAuthTokenService`, `InvalidCredentialsException`.
+- **Infrastructure**: `AuthTokenService` — valida credenciais e gera o JWT (HMAC-SHA256).
+- **Web**: `POST /api/auth/login`, Swagger em `/swagger`, `/health/live`.
+
+```bash
+make run-auth-web
+# ou local: cd services/auth/src/CashFlow.Auth.Web && ASPNETCORE_ENVIRONMENT=Development dotnet run
+# ou via Docker: make up-all (sobe junto com Transactions/Consolidation)
+```
+
+```bash
+curl -X POST http://localhost:5226/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}'
+```
+
+Usuário/senha de desenvolvimento (`Auth:Username`/`Auth:Password`) e o segredo do JWT
+(`Jwt:Secret`) estão em `appsettings.Development.json` desse serviço. Diferente dos outros 4
+serviços, não depende de Postgres/RabbitMQ — por isso não tem `depends_on` no compose.
+
+**Limitações atuais / próximos passos:**
+
+- **Refresh token é decorativo**: `AuthTokenService` gera um refresh token no login, mas não
+  existe endpoint nem lógica pra trocá-lo por um novo access token, nem persistência pra
+  validar/revogar um refresh token depois. Hoje ele só aparece na resposta e não é usado em
+  lugar nenhum.
+- **Usuário único fixo via configuração**: `Auth:Username`/`Auth:Password` no appsettings
+  validam um único usuário fixo. Não há cadastro, múltiplos usuários, nem senha com hash
+  em banco — o próximo passo seria um repositório de usuários de verdade.
+- **Segredo do JWT em texto puro no `appsettings.Development.json`**: aceitável em
+  desenvolvimento (mesmo padrão das outras credenciais de dev já commitadas no projeto,
+  como usuário/senha do Postgres/RabbitMQ), mas em produção viria de variável de
+  ambiente ou secrets manager, nunca commitado.
+
+`Transactions.Web` e `Consolidation.Web` já validam o JWT emitido por esse serviço
+(`Microsoft.AspNetCore.Authentication.JwtBearer`, mesmo secret/issuer/audience) e exigem
+`Authorization: Bearer <token>` em `/api/transactions` e `/api/daily-balances`
+(`.RequireAuthorization()` nos grupos de endpoint) — `/health/live`/`/health/ready` continuam
+públicos de propósito, pra não quebrar probes/load balancer. Sem token ou com token
+inválido/expirado → `401`.
+
 ## Evoluções futuras / o que eu faria com mais tempo
 
-- **Health checks mais completos**: hoje só verificam o banco; não há verificação de conectividade
-  com o RabbitMQ nem nos workers.
-- **Autenticação/autorização** nas APIs — fora do escopo funcional descrito no desafio, mas seria o
-  próximo passo antes de um ambiente real.
 - **Reprocessamento de mensagens da outbox com erro**: hoje uma mensagem que falhou na publicação
   fica marcada e não é mais tentada automaticamente; faltaria um mecanismo de retry/alerta para essas
   linhas.

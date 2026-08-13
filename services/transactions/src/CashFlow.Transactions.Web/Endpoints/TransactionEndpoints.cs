@@ -8,7 +8,8 @@ public static class TransactionEndpoints
     public static void MapTransactionEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/transactions")
-            .WithName("Transactions");
+            .WithName("Transactions")
+            .RequireAuthorization();
 
         group.MapPost("", CreateTransaction)
             .WithName("Create Transaction")

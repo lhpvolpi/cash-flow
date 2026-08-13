@@ -7,7 +7,8 @@ public static class DailyBalanceEndpoints
     public static void MapDailyBalanceEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/daily-balances")
-            .WithName("Daily Balances");
+            .WithName("Daily Balances")
+            .RequireAuthorization();
 
         group.MapGet("{date:datetime}", GetDailyBalance)
             .WithName("Get Daily Balance")

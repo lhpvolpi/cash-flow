@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk.Web">
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+	<PropertyGroup Condition=" '$(RunConfiguration)' == 'http' " />
+	<ItemGroup>
+		<PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\CashFlow.Auth.Application\CashFlow.Auth.Application.csproj" />
+		<ProjectReference Include="..\CashFlow.Auth.Infrastructure\CashFlow.Auth.Infrastructure.csproj" />
+	</ItemGroup>
+</Project>

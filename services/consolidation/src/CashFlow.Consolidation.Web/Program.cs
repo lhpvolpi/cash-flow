@@ -8,7 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
-builder.Services.AddWebServices();
+builder.Services.AddWebServices(builder.Configuration);
 
 var app = builder.Build();
 
@@ -35,20 +35,26 @@ else
     app.UseHsts();
 }
 
-app.UseHealthChecks("/health");
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = healthCheck =>
+        healthCheck.Tags.Contains("ready")
+});
+
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 // endpoints
 app.MapDailyBalanceEndpoints();
 
-app.UseExceptionHandler(options =>
-{
-    options.Run(async context =>
-    {
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await context.Response.WriteAsync("An unexpected error occurred.");
-    });
-});
+app.UseExceptionHandler();
 
 app.Run();

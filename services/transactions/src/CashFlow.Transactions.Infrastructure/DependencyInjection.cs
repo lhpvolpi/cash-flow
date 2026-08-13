@@ -37,6 +37,15 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IOutboxBrokerPublisher, RabbitMqOutboxBrokerPublisher>();
+
+        services.AddHealthChecks()
+            .AddNpgSql(
+                connectionString,
+                name: "postgres",
+                tags: new List<string> { "ready" })
+            .AddRabbitMQ(
+                name: "rabbitmq",
+                tags: new List<string> { "ready" });
     }
 
     public static async Task InitializeDatabaseAsync(this WebApplication app)

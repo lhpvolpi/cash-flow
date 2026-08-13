@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="Npgsql" Version="8.0.3" />
+		<PackageReference Include="RabbitMQ.Client" Version="6.8.0" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\shared\src\CashFlow.Shared.Application\CashFlow.Shared.Application.csproj" />
+		<ProjectReference Include="..\..\shared\src\CashFlow.Shared.Domain\CashFlow.Shared.Domain.csproj" />
+	</ItemGroup>
+</Project>

@@ -1,4 +1,4 @@
-.PHONY: help up down restart logs clean publish-all up-all down-all logs-all build run-transactions-web run-transactions-worker run-consolidation-web run-consolidation-consumer add-migration-transactions add-migration-consolidation migrate-transactions migrate-consolidation test stop clear restore rebuild
+.PHONY: help up down restart logs clean publish-all up-all clean-publish down-all logs-all build run-transactions-web run-transactions-worker run-consolidation-web run-consolidation-consumer run-auth-web add-migration-transactions add-migration-consolidation migrate-transactions migrate-consolidation test load-test stop clear restore rebuild
 
 help:
 	@echo "CashFlow - Comandos disponíveis:"
@@ -10,10 +10,11 @@ help:
 	@echo "  make logs            - Ver logs dos containers"
 	@echo "  make clean           - Limpar containers e volumes"
 	@echo ""
-	@echo "🐳 Docker (stack completa, incluindo os 4 serviços .NET):"
-	@echo "  make up-all          - dotnet publish dos 4 serviços + subir Postgres, RabbitMQ e todos eles"
-	@echo "  make publish-all     - Só gerar o publish dos 4 serviços (sem subir containers)"
-	@echo "  make down-all        - Parar toda a stack (infra + serviços)"
+	@echo "🐳 Docker (stack completa, incluindo os 5 serviços .NET):"
+	@echo "  make up-all          - dotnet publish dos 5 serviços + subir Postgres, RabbitMQ e todos eles"
+	@echo "  make publish-all     - Só gerar o publish dos 5 serviços (sem subir containers)"
+	@echo "  make down-all        - Parar toda a stack e remover as pastas publish/ geradas"
+	@echo "  make clean-publish   - Só remover as pastas publish/ dos 5 serviços"
 	@echo "  make logs-all        - Ver logs de toda a stack"
 	@echo ""
 	@echo "🔨 Build:"
@@ -27,6 +28,7 @@ help:
 	@echo "  make run-transactions-worker      - Rodar Transactions Outbox Worker"
 	@echo "  make run-consolidation-web        - Rodar Consolidation Web"
 	@echo "  make run-consolidation-consumer   - Rodar Consolidation Consumer"
+	@echo "  make run-auth-web                 - Rodar Auth Web"
 	@echo ""
 	@echo "📊 Database:"
 	@echo "  make add-migration-transactions NAME=<nome>     - Criar migration (Transactions)"
@@ -36,6 +38,7 @@ help:
 	@echo ""
 	@echo "🧪 Testes:"
 	@echo "  make test                         - Rodar testes"
+	@echo "  make load-test                    - Teste de carga no Consolidation.Consumer (RATE/DURATION opcionais)"
 	@echo ""
 	@echo "⛔ Utilitários:"
 	@echo "  make stop                         - Parar processos .NET em execução"
@@ -65,13 +68,22 @@ publish-all:
 	dotnet publish services/transactions/src/CashFlow.Transactions.Outbox/CashFlow.Transactions.Outbox.csproj -c Release -o services/transactions/src/CashFlow.Transactions.Outbox/publish
 	dotnet publish services/consolidation/src/CashFlow.Consolidation.Web/CashFlow.Consolidation.Web.csproj -c Release -o services/consolidation/src/CashFlow.Consolidation.Web/publish
 	dotnet publish services/consolidation/src/CashFlow.Consolidation.Consumer/CashFlow.Consolidation.Consumer.csproj -c Release -o services/consolidation/src/CashFlow.Consolidation.Consumer/publish
-	@echo "✅ Publish gerado para os 4 serviços"
+	dotnet publish services/auth/src/CashFlow.Auth.Web/CashFlow.Auth.Web.csproj -c Release -o services/auth/src/CashFlow.Auth.Web/publish
+	@echo "✅ Publish gerado para os 5 serviços"
 
 up-all: publish-all
 	docker-compose --profile app up -d --build
-	@echo "✅ Stack completa iniciada (Postgres, RabbitMQ, Transactions e Consolidation)"
+	@echo "✅ Stack completa iniciada (Postgres, RabbitMQ, Transactions, Consolidation e Auth)"
 
-down-all:
+clean-publish:
+	rm -rf services/transactions/src/CashFlow.Transactions.Web/publish
+	rm -rf services/transactions/src/CashFlow.Transactions.Outbox/publish
+	rm -rf services/consolidation/src/CashFlow.Consolidation.Web/publish
+	rm -rf services/consolidation/src/CashFlow.Consolidation.Consumer/publish
+	rm -rf services/auth/src/CashFlow.Auth.Web/publish
+	@echo "✅ Pastas publish/ removidas"
+
+down-all: clean-publish
 	docker-compose --profile app down
 	@echo "✅ Stack completa parada"
 
@@ -108,6 +120,9 @@ run-consolidation-web:
 run-consolidation-consumer:
 	cd services/consolidation/src/CashFlow.Consolidation.Consumer && dotnet run
 
+run-auth-web:
+	cd services/auth/src/CashFlow.Auth.Web && dotnet run
+
 # Database
 add-migration-transactions:
 	@if [ -z "$(NAME)" ]; then echo "❌ Use: make add-migration-transactions NAME=MigrationName"; exit 1; fi
@@ -131,6 +146,13 @@ migrate-consolidation:
 test:
 	dotnet test CashFlow.sln
 	@echo "✅ Testes executados"
+
+RATE ?= 50
+DURATION ?= 60
+
+load-test:
+	@curl -sf http://localhost:5225/health/ready > /dev/null || (echo "❌ Consolidation.Consumer não está respondendo em http://localhost:5225/health/ready — suba com 'make run-consolidation-consumer' ou 'make up-all' antes de rodar o teste de carga" && exit 1)
+	dotnet run --project tools/CashFlow.LoadTest -- $(RATE) $(DURATION)
 
 # Utilitários
 stop:

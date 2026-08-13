@@ -2,6 +2,7 @@ using CashFlow.Consolidation.Application;
 using CashFlow.Consolidation.Consumer;
 using CashFlow.Consolidation.Infrastructure;
 
+
 var host = Host.CreateDefaultBuilder(args)
     .ConfigureAppConfiguration((context, config) =>
     {
@@ -14,8 +15,25 @@ var host = Host.CreateDefaultBuilder(args)
     {
         services.AddApplicationServices();
         services.AddInfrastructureServices(builder.Configuration);
-        services.AddHealthChecks();
         services.AddHostedService<ProcessBrokerMessagesWorker>();
+    })
+    .ConfigureWebHostDefaults(webBuilder =>
+    {
+        webBuilder.Configure(app =>
+        {
+            app.UseRouting();
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapHealthChecks("/health/live", new HealthCheckOptions
+                {
+                    Predicate = _ => false
+                });
+                endpoints.MapHealthChecks("/health/ready", new HealthCheckOptions
+                {
+                    Predicate = healthCheck => healthCheck.Tags.Contains("ready")
+                });
+            });
+        });
     })
     .Build();
 

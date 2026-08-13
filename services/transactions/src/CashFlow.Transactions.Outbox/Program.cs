@@ -15,10 +15,25 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddApplicationServices();
         services.AddInfrastructureServices(builder.Configuration);
 
-        services.AddHealthChecks()
-            .AddCheck("/health", () => HealthCheckResult.Healthy());
-
         services.AddHostedService<PublishOutboxMessagesWorker>();
+    })
+    .ConfigureWebHostDefaults(webBuilder =>
+    {
+        webBuilder.Configure(app =>
+        {
+            app.UseRouting();
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapHealthChecks("/health/live", new HealthCheckOptions
+                {
+                    Predicate = _ => false
+                });
+                endpoints.MapHealthChecks("/health/ready", new HealthCheckOptions
+                {
+                    Predicate = healthCheck => healthCheck.Tags.Contains("ready")
+                });
+            });
+        });
     })
     .Build();
 

@@ -72,6 +72,8 @@ services:
       - DOTNET_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=transactions;Username=postgres;Password=postgres
       - ConnectionStrings__RabbitMq=amqp://guest:guest@rabbitmq:5672/
+    ports:
+      - "5223:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,6 +114,8 @@ services:
       - DOTNET_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=consolidation;Username=postgres;Password=postgres
       - ConnectionStrings__RabbitMq=amqp://guest:guest@rabbitmq:5672/
+    ports:
+      - "5225:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -119,6 +123,19 @@ services:
         condition: service_healthy
       consolidation-web:
         condition: service_started
+    networks:
+      - cash-flow-network
+
+  auth-web:
+    build:
+      context: services/auth/src/CashFlow.Auth.Web
+    profiles: ["app"]
+    restart: always
+    container_name: cash-flow-auth-web
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "5226:8080"
     networks:
       - cash-flow-network
 
