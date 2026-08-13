@@ -59,3 +59,7 @@ app.MapTransactionEndpoints();
 app.UseExceptionHandler();
 
 app.Run();
+
+public partial class Program
+{
+}

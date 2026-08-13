@@ -14,9 +14,15 @@ public sealed class IntegrationTestFixture : IAsyncLifetime
     private ServiceProvider _transactionsServices = null!;
     private ServiceProvider _consolidationServices = null!;
 
+    public const string JwtSecret = "dev-only-secret-key-do-not-use-in-production-change-me-1234567890";
+    public const string JwtIssuer = "CashFlow.Auth";
+    public const string JwtAudience = "CashFlow";
+
     public IServiceProvider TransactionsServices => _transactionsServices;
     public IServiceProvider ConsolidationServices => _consolidationServices;
     public string RabbitMqConnectionString { get; private set; } = null!;
+    public string TransactionsDbConnectionString { get; private set; } = null!;
+    public string ConsolidationDbConnectionString { get; private set; } = null!;
 
     public async Task InitializeAsync()
     {
@@ -35,9 +41,11 @@ public sealed class IntegrationTestFixture : IAsyncLifetime
         await CreateDatabaseAsync("consolidation");
 
         RabbitMqConnectionString = _rabbitMq.GetConnectionString();
+        TransactionsDbConnectionString = BuildDatabaseConnectionString("transactions");
+        ConsolidationDbConnectionString = BuildDatabaseConnectionString("consolidation");
 
-        _transactionsServices = BuildTransactionsServices(BuildDatabaseConnectionString("transactions"));
-        _consolidationServices = BuildConsolidationServices(BuildDatabaseConnectionString("consolidation"), retryDelayMilliseconds: null, maxRetries: null);
+        _transactionsServices = BuildTransactionsServices(TransactionsDbConnectionString);
+        _consolidationServices = BuildConsolidationServices(ConsolidationDbConnectionString, retryDelayMilliseconds: null, maxRetries: null);
 
         await MigrateAsync<TransactionsDbContext>(_transactionsServices);
         await MigrateAsync<ConsolidationDbContext>(_consolidationServices);

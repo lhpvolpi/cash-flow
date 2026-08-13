@@ -1,7 +1,7 @@
 # Arquitetura
 
 Este documento complementa o [README](../README.md) com uma visão mais detalhada do desenho da
-solução: como os dois serviços se relacionam, como cada um é organizado internamente, o fluxo
+solução: como os serviços se relacionam, como cada um é organizado internamente, o fluxo
 temporal de um lançamento até aparecer no saldo consolidado, e como tudo isso é implantado em
 containers.
 
@@ -10,6 +10,10 @@ containers.
 ```mermaid
 flowchart LR
     Merchant(["Comerciante"])
+
+    subgraph AU["Serviço de Auth"]
+        AuthWeb["Auth.Web\n(API REST)"]
+    end
 
     subgraph TX["Serviço de Transações"]
         TXWeb["Transactions.Web\n(API REST)"]
@@ -27,8 +31,10 @@ flowchart LR
         CODB[("Postgres\nconsolidation")]
     end
 
-    Merchant -->|"POST /api/transactions"| TXWeb
-    Merchant -->|"GET /api/daily-balances"| COWeb
+    Merchant -->|"POST /api/auth/login"| AuthWeb
+    AuthWeb -->|JWT| Merchant
+    Merchant -->|"POST /api/transactions\n(Bearer JWT)"| TXWeb
+    Merchant -->|"GET /api/daily-balances\n(Bearer JWT)"| COWeb
     TXWeb --> TXDB
     TXOutbox --> TXDB
     TXOutbox -->|publica evento| Queue
@@ -43,10 +49,14 @@ diretamente. A única via de comunicação entre eles é o evento assíncrono pu
 com o RabbitMQ de forma síncrona (só grava no próprio banco), então ele nunca fica indisponível por
 causa do Consolidado ou do broker.
 
+O Auth não tem banco próprio — hoje valida um único usuário fixo via configuração e assina o JWT
+com um segredo simétrico (HMAC-SHA256). Transactions e Consolidation validam esse JWT localmente
+(mesmo segredo/issuer/audience), sem chamar o Auth em cada requisição.
+
 ## 2. Arquitetura em camadas (Clean Architecture)
 
-Ambos os serviços seguem a mesma organização interna — a diferença entre eles é só o conteúdo de
-cada camada, não a forma:
+Os três serviços (Transactions, Consolidation e Auth) seguem a mesma organização interna — a
+diferença entre eles é só o conteúdo de cada camada, não a forma:
 
 ```mermaid
 flowchart TD
@@ -97,6 +107,7 @@ entra:
 ```mermaid
 sequenceDiagram
     actor M as Comerciante
+    participant AW as Auth.Web
     participant TW as Transactions.Web
     participant TDB as Postgres (transactions)
     participant TO as Transactions.Outbox
@@ -105,7 +116,10 @@ sequenceDiagram
     participant CDB as Postgres (consolidation)
     participant CW as Consolidation.Web
 
-    M->>TW: POST /api/transactions
+    M->>AW: POST /api/auth/login
+    AW-->>M: 200 OK (JWT)
+
+    M->>TW: POST /api/transactions (Bearer JWT)
     TW->>TDB: INSERT Transaction + OutboxMessage (mesma transação)
     TDB-->>TW: OK
     TW-->>M: 200 OK (lançamento criado)
@@ -130,7 +144,7 @@ sequenceDiagram
         Note over MQ,CC: após MaxRetries, vai para .failed (DLQ)
     end
 
-    M->>CW: GET /api/daily-balances/{date}
+    M->>CW: GET /api/daily-balances/{date} (Bearer JWT)
     CW->>CDB: SELECT DailyBalance
     CDB-->>CW: saldo atualizado
     CW-->>M: 200 OK
@@ -159,6 +173,7 @@ flowchart TB
         TXOutbox["transactions-outbox"]
         COWeb["consolidation-web\n:5224"]
         COConsumer["consolidation-consumer"]
+        AuthWeb["auth-web\n:5226"]
     end
 
     TXWeb --> Postgres
@@ -169,10 +184,11 @@ flowchart TB
     COWeb --> Postgres
 ```
 
-`postgres` e `rabbitmq` sobem sempre (`make up`); os quatro serviços .NET ficam no profile `app` do
+`postgres` e `rabbitmq` sobem sempre (`make up`); os cinco serviços .NET ficam no profile `app` do
 Compose e só sobem com `make up-all` — isso preserva o fluxo de desenvolvimento local (rodar os
 serviços via `dotnet run` contra a infra em container) sem conflito de porta com a stack
-inteira em containers. Veja a seção **Como rodar localmente** do README para as duas opções.
+inteira em containers. `auth-web` não depende de Postgres/RabbitMQ, por isso não tem seta pra
+nenhum dos dois no diagrama. Veja a seção **Como rodar localmente** do README para as duas opções.
 
 ## Decisões arquiteturais detalhadas
 

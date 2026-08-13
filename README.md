@@ -71,11 +71,11 @@ make up-all
 ```
 
 Os `Dockerfile` de cada serviço são propositalmente simples (`COPY ./publish .`, sem etapa de build
-dentro da imagem) — por isso `make up-all` primeiro roda `dotnet publish` dos 4 projetos localmente
+dentro da imagem) — por isso `make up-all` primeiro roda `dotnet publish` dos 5 projetos localmente
 (requer o .NET 8 SDK) e só então builda as imagens e sobe tudo: Postgres, RabbitMQ, `Transactions.Web`,
-`Transactions.Outbox`, `Consolidation.Web` e `Consolidation.Consumer`, já conectados entre si na rede
-do Compose. As migrations são aplicadas automaticamente por cada API ao subir. Portas expostas: `5222`
-(Transactions) e `5224` (Consolidation) — as mesmas usadas na Opção 2.
+`Transactions.Outbox`, `Consolidation.Web`, `Consolidation.Consumer` e `Auth.Web`, já conectados entre
+si na rede do Compose. As migrations são aplicadas automaticamente por cada API ao subir. Portas
+expostas: `5222` (Transactions), `5224` (Consolidation) e `5226` (Auth) — as mesmas usadas na Opção 2.
 
 ```bash
 make down-all   # para tudo
@@ -89,6 +89,7 @@ make logs-all   # acompanha os logs de todos os serviços
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 - Docker (para Postgres e RabbitMQ via `docker-compose`)
 - `make` (opcional, mas todos os comandos abaixo têm um alvo no `Makefile`)
+- `jq` (opcional, só pros exemplos de `curl` abaixo que extraem o token do JSON de resposta)
 
 #### Passo a passo
 
@@ -108,13 +109,14 @@ make migrate-consolidation
 > Em ambiente de Desenvolvimento, cada API também aplica suas próprias migrations automaticamente ao
 > subir (`ApplyMigrationsAsync`), então o passo 3 é uma garantia, não estritamente obrigatório.
 
-Depois, em 4 terminais separados (são 4 processos independentes):
+Depois, em 5 terminais separados (são 5 processos independentes):
 
 ```bash
 make run-transactions-web        # API de lançamentos      → http://localhost:5222/swagger
 make run-transactions-worker     # publica o outbox no RabbitMQ
 make run-consolidation-web       # API de saldo diário     → http://localhost:5224/swagger
 make run-consolidation-consumer  # consome eventos e consolida o saldo
+make run-auth-web                # API de autenticação     → http://localhost:5226/swagger
 ```
 
 RabbitMQ Management UI: [http://localhost:15672](http://localhost:15672) (usuário/senha: `guest`/`guest`).
@@ -129,16 +131,27 @@ Veja `make help` para a lista completa de comandos (build, migrations, format, e
 | CashFlow.Transactions.Outbox | Worker | `http://localhost:5223` (só health) | `transactions` |
 | CashFlow.Consolidation.Web | API REST | `http://localhost:5224` | `consolidation` |
 | CashFlow.Consolidation.Consumer | Worker | `http://localhost:5225` (só health) | `consolidation` |
+| CashFlow.Auth.Web | API REST | `http://localhost:5226` | — |
 | PostgreSQL | Banco de dados | `localhost:5432` | `transactions`, `consolidation` |
 | RabbitMQ | Broker | AMQP `localhost:5672`, UI `localhost:15672` | — |
 
 ## API
+
+Transactions e Consolidation exigem um JWT válido (ver [Serviço de Auth](#serviço-de-auth-em-construção)
+abaixo). Obtenha um token antes de chamar qualquer endpoint:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:5226/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}' | jq -r '.token')
+```
 
 ### Criar lançamento
 
 ```bash
 curl -X POST http://localhost:5222/api/transactions \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "amount": 150.00,
     "type": "Credit",
@@ -164,7 +177,8 @@ Resposta `200 OK`:
 ### Listar lançamentos (paginado, com filtro de data)
 
 ```bash
-curl "http://localhost:5222/api/transactions?PageNumber=1&PageSize=10&StartDate=2026-07-01&EndDate=2026-07-31"
+curl "http://localhost:5222/api/transactions?PageNumber=1&PageSize=10&StartDate=2026-07-01&EndDate=2026-07-31" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Resposta `200 OK`:
@@ -184,7 +198,8 @@ Resposta `200 OK`:
 ### Consultar saldo diário consolidado
 
 ```bash
-curl http://localhost:5224/api/daily-balances/2026-07-27
+curl http://localhost:5224/api/daily-balances/2026-07-27 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Resposta `200 OK`:
@@ -199,8 +214,9 @@ Se não houver saldo para a data, retorna `404 Not Found`.
 > (outbox → RabbitMQ → consumer), tipicamente de milissegundos em condições normais — isso é
 > intencional, é o preço da Transações não depender do Consolidado.
 
-Ambas as APIs expõem Swagger (`/swagger`). Os 4 processos (as 2 APIs e os 2 workers) expõem dois
-endpoints de health check, no padrão liveness/readiness:
+Ambas as APIs expõem Swagger (`/swagger`). Os 4 processos originais do desafio (as 2 APIs e os 2
+workers) expõem dois endpoints de health check, no padrão liveness/readiness (o Auth também expõe
+`/health/live`, mas sem dependência externa pra checar — ver [Serviço de Auth](#serviço-de-auth-em-construção)):
 
 - `/health/live` — sempre `Healthy` se o processo está de pé (não executa nenhuma dependência).
 - `/health/ready` — só fica `Healthy` se Postgres **e** RabbitMQ estiverem alcançáveis
@@ -265,7 +281,7 @@ make test
 ```
 
 Roda automaticamente a cada `push`/PR na `main` via
-[GitHub Actions](.github/workflows/ci.yml) (build + os 53 testes, incluindo os de integração —
+[GitHub Actions](.github/workflows/ci.yml) (build + os 59 testes, incluindo os de integração —
 o runner do GitHub já vem com Docker, então o Testcontainers funciona sem configuração extra).
 
 - **Unitários** (`*.Domain.Tests`, `*.Application.Tests` em cada serviço, incluindo Auth): regras
@@ -277,9 +293,12 @@ o runner do GitHub já vem com Docker, então o Testcontainers funciona sem conf
   com o `RabbitMqMessageBrokerConsumer` de verdade e confere o saldo consolidado no banco; um
   segundo teste publica uma mensagem que falha sempre e confirma que ela é movida para a fila de
   dead-letter; um terceiro par de testes resolve o `HealthCheckService` de cada serviço e confirma
-  que os checks de Postgres e RabbitMQ reportam `Healthy` contra dependências reais. **Exige Docker
-  rodando localmente** (`make up` não é necessário — o teste sobe seus próprios containers
-  efêmeros).
+  que os checks de Postgres e RabbitMQ reportam `Healthy` contra dependências reais; um quarto par
+  (`TransactionsAuthorizationTests`/`ConsolidationAuthorizationTests`) sobe o `Transactions.Web`/
+  `Consolidation.Web` reais via `WebApplicationFactory` e confirma `401` sem token, `401` com token
+  inválido e sucesso com um JWT válido — pipeline HTTP real, incluindo o middleware de autenticação.
+  **Exige Docker rodando localmente** (`make up` não é necessário — o teste sobe seus próprios
+  containers efêmeros, isolados do ambiente de dev).
 - **Integração — Auth** (`services/auth/tests/CashFlow.Auth.IntegrationTests`): sem Postgres/
   RabbitMQ (o serviço não depende de nenhum dos dois), então monta o `ServiceProvider` real
   (`AddApplicationServices` + `AddInfrastructureServices`) com configuração em memória e manda o

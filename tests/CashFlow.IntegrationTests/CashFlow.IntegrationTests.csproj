@@ -9,7 +9,8 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.1" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.13.0" />
     <PackageReference Include="Testcontainers.RabbitMq" Version="4.13.0" />
@@ -18,10 +19,20 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\services\transactions\src\CashFlow.Transactions.Application\CashFlow.Transactions.Application.csproj" />
     <ProjectReference Include="..\..\services\transactions\src\CashFlow.Transactions.Infrastructure\CashFlow.Transactions.Infrastructure.csproj" />
     <ProjectReference Include="..\..\services\consolidation\src\CashFlow.Consolidation.Application\CashFlow.Consolidation.Application.csproj" />
     <ProjectReference Include="..\..\services\consolidation\src\CashFlow.Consolidation.Infrastructure\CashFlow.Consolidation.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\services\transactions\src\CashFlow.Transactions.Web\CashFlow.Transactions.Web.csproj">
+      <Aliases>TransactionsWeb</Aliases>
+    </ProjectReference>
+    <ProjectReference Include="..\..\services\consolidation\src\CashFlow.Consolidation.Web\CashFlow.Consolidation.Web.csproj">
+      <Aliases>ConsolidationWeb</Aliases>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>
