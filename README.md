@@ -137,7 +137,7 @@ Veja `make help` para a lista completa de comandos (build, migrations, format, e
 
 ## API
 
-Transactions e Consolidation exigem um JWT válido (ver [Serviço de Auth](#serviço-de-auth-em-construção)
+Transactions e Consolidation exigem um JWT válido (ver [Serviço de Auth](#serviço-de-auth)
 abaixo). Obtenha um token antes de chamar qualquer endpoint:
 
 ```bash
@@ -216,7 +216,7 @@ Se não houver saldo para a data, retorna `404 Not Found`.
 
 Ambas as APIs expõem Swagger (`/swagger`). Os 4 processos originais do desafio (as 2 APIs e os 2
 workers) expõem dois endpoints de health check, no padrão liveness/readiness (o Auth também expõe
-`/health/live`, mas sem dependência externa pra checar — ver [Serviço de Auth](#serviço-de-auth-em-construção)):
+`/health/live`, mas sem dependência externa pra checar — ver [Serviço de Auth](#serviço-de-auth)):
 
 - `/health/live` — sempre `Healthy` se o processo está de pé (não executa nenhuma dependência).
 - `/health/ready` — só fica `Healthy` se Postgres **e** RabbitMQ estiverem alcançáveis
@@ -306,20 +306,13 @@ o runner do GitHub já vem com Docker, então o Testcontainers funciona sem conf
   issuer/audience/subject corretos, que senha errada lança `InvalidCredentialsException`, e que
   campos vazios lançam `ValidationException` pelo pipeline. Não exige Docker.
 
-Escrever o teste de integração revelou dois bugs reais que passaram despercebidos até então: a fila
-`daily-balance-updates` era declarada com argumentos diferentes pelo publisher do outbox e pelo
-consumer (o RabbitMQ rejeita isso com `PRECONDITION_FAILED` dependendo de quem sobe primeiro), e a
-conexão do RabbitMQ do lado do Consolidado não habilitava `DispatchConsumersAsync`, então o
-`AsyncEventingBasicConsumer` nunca recebia entregas — nenhum dos dois erros aparecia em teste unitário
-com mocks. Ambos foram corrigidos.
+## Serviço de Auth
 
-## Serviço de Auth (em construção)
-
-Serviço de autenticação (`services/auth`) que emite um JWT a partir de usuário/senha — resposta
-ao item de segurança do feedback ("não foram identificados mecanismos de autenticação ou
-autorização nas APIs"). Já faz parte do `CashFlow.sln` principal (`dotnet build`/`dotnet test`/CI
-cobrem os 4 projetos + os 2 de teste normalmente), do `docker-compose.yaml` (serviço `auth-web`,
-perfil `app`) e do Makefile (`make run-auth-web`, incluído em `make up-all`/`make publish-all`).
+Serviço de autenticação (`services/auth`) responsável por emitir um JWT a partir de usuário/senha,
+usado para proteger as APIs de Transactions e Consolidation. Faz parte do `CashFlow.sln` principal
+(`dotnet build`/`dotnet test`/CI cobrem os 4 projetos + os 2 de teste normalmente), do
+`docker-compose.yaml` (serviço `auth-web`, perfil `app`) e do Makefile (`make run-auth-web`,
+incluído em `make up-all`/`make publish-all`).
 
 Mesma Clean Architecture dos outros serviços (Domain → Application → Infrastructure → Web):
 
@@ -345,19 +338,18 @@ Usuário/senha de desenvolvimento (`Auth:Username`/`Auth:Password`) e o segredo 
 (`Jwt:Secret`) estão em `appsettings.Development.json` desse serviço. Diferente dos outros 4
 serviços, não depende de Postgres/RabbitMQ — por isso não tem `depends_on` no compose.
 
-**Limitações atuais / próximos passos:**
+**Possíveis evoluções:**
 
-- **Refresh token é decorativo**: `AuthTokenService` gera um refresh token no login, mas não
-  existe endpoint nem lógica pra trocá-lo por um novo access token, nem persistência pra
-  validar/revogar um refresh token depois. Hoje ele só aparece na resposta e não é usado em
-  lugar nenhum.
-- **Usuário único fixo via configuração**: `Auth:Username`/`Auth:Password` no appsettings
-  validam um único usuário fixo. Não há cadastro, múltiplos usuários, nem senha com hash
-  em banco — o próximo passo seria um repositório de usuários de verdade.
-- **Segredo do JWT em texto puro no `appsettings.Development.json`**: aceitável em
-  desenvolvimento (mesmo padrão das outras credenciais de dev já commitadas no projeto,
-  como usuário/senha do Postgres/RabbitMQ), mas em produção viria de variável de
-  ambiente ou secrets manager, nunca commitado.
+- **Fluxo completo de refresh token**: o login já emite um refresh token junto com o access token;
+  o próximo passo natural é um endpoint que o troque por um novo access token (com a devida
+  persistência para permitir revogação).
+- **Repositório de usuários**: hoje a autenticação valida um único usuário de referência via
+  configuração (`Auth:Username`/`Auth:Password`), suficiente para o escopo atual; evoluir para
+  cadastro com múltiplos usuários e senha com hash em banco é o próximo passo natural para um
+  cenário multiusuário.
+- **Gestão de segredos**: o segredo do JWT em `appsettings.Development.json` segue o mesmo padrão
+  das demais credenciais de desenvolvimento já usadas no projeto (Postgres/RabbitMQ); em produção,
+  viria de variável de ambiente ou secrets manager.
 
 `Transactions.Web` e `Consolidation.Web` já validam o JWT emitido por esse serviço
 (`Microsoft.AspNetCore.Authentication.JwtBearer`, mesmo secret/issuer/audience) e exigem
